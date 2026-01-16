@@ -1,4 +1,28 @@
-"""Color conversion and validation utilities for EntropyPilot."""
+"""Color conversion and validation utilities for EntropyPilot.
+
+HSL Hue Degree Reference (0-360):
+    Red:           355-10°  (wraps around 0°)
+    Red-Orange:    10-20°
+    Orange:        20-40°
+    Orange-Yellow: 40-50°
+    Yellow:        50-70°
+    Yellow-Green:  70-85°
+    Green:         85-150°
+    Cyan/Aqua:     150-200°
+    Blue:          200-260°
+    Purple/Violet: 260-300°
+    Magenta:       300-325°
+    Pink/Rose:     325-355°
+
+Saturation & Lightness considerations:
+    - Saturation < 0.15: Gray/Desaturated (color hue is less relevant)
+    - Lightness < 0.15: Near-black
+    - Lightness > 0.85: Near-white
+
+Red/Orange/Pink Detection Range:
+    - Combined: 325-360° or 0-45° (~22% of hue spectrum)
+    - This catches all reds, oranges, and pinks (including deep pinks at ~327°)
+"""
 
 import colorsys
 
@@ -69,32 +93,50 @@ def rgb_to_hex(r: float, g: float, b: float) -> str:
 
 def is_red_or_orange(hex_color: str) -> bool:
     """
-    Detect if a color is a shade of red or orange.
+    Detect if a color is a shade of red or orange (including pink).
 
-    Uses HSL color space to check hue ranges:
-    - Red: Hue roughly 0-30 or 330-360
-    - Orange: Hue roughly 15-45
-    - Combined range: 10-40 or 330-360
+    Uses HSL color space with precise hue ranges:
+    - Pink/Rose: 325-355° (tints of red, catches deep pinks at ~327°)
+    - Red: 355-10° (wraps around 0°)
+    - Red-Orange: 10-20°
+    - Orange: 20-45°
+    - Combined range: 325-360° or 0-45°
+
+    Explicitly EXCLUDES:
+    - Yellow: 50-70° (distinct from orange)
+    - Magenta: 300-325° (purple-leaning, not red-leaning)
 
     Args:
         hex_color: Hex color string to validate
 
     Returns:
-        True if color is red or orange, False otherwise
+        True if color is red, orange, or pink, False otherwise
 
     Example:
-        >>> is_red_or_orange("#FF0000")
+        >>> is_red_or_orange("#FF0000")  # Pure red
         True
-        >>> is_red_or_orange("#0000FF")
+        >>> is_red_or_orange("#FF8800")  # Orange
+        True
+        >>> is_red_or_orange("#FF69B4")  # Hot pink (330°)
+        True
+        >>> is_red_or_orange("#FF1493")  # Deep pink (327.6°)
+        True
+        >>> is_red_or_orange("#FFFF00")  # Yellow
+        False
+        >>> is_red_or_orange("#FF00FF")  # Magenta (300°)
         False
     """
     try:
         h, s, l = hex_to_hsl(hex_color)
+
         # Need some saturation to be considered a color (not gray)
         if s < 0.15:
             return False
-        # Red/orange hue ranges
-        return (10 <= h <= 40) or (330 <= h <= 360)
+
+        # Red/orange/pink hue ranges: 325-360° or 0-45°
+        # Lower bound at 325° catches deep pinks (327°) without over-blocking magentas
+        # Upper bound at 45° excludes yellows (which start around 50°)
+        return h >= 325 or h <= 45
     except (ValueError, IndexError):
         return False
 

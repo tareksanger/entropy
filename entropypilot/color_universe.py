@@ -1,12 +1,15 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-# This import is necessary for 3D plotting even if not explicitly used
-from mpl_toolkits.mplot3d import Axes3D
-
 # Plotly for interactive 3D visualization
 import plotly.graph_objects as go
+
+# This import is necessary for 3D plotting even if not explicitly used
+from mpl_toolkits.mplot3d import Axes3D
 from plotly.subplots import make_subplots
+
+# Color utilities for HSL-based filtering
+from entropypilot.utils.color import is_red_or_orange, is_cool_blue_aqua_teal, rgb_to_hex
 
 # ==========================================
 # CONFIGURATION
@@ -26,56 +29,33 @@ total_universe = np.random.rand(NUM_POINTS, 3)
 
 # ==========================================
 # 2. DEFINE THE MATHEMATICAL FILTERS
-# This is the core of your argument: translating words into math space.
+# Use precise HSL hue-based filtering instead of RGB approximations
 # ==========================================
 
 # ---- Filter A: Affirmative ("ONLY cool blues, aquas, teals") ----
-# Logic: Use a curve-based "coolness score" for smooth boundaries.
-# Cool blues/teals have high blue, low red, variable green (for cyan/teal).
-
-# Calculate "blue dominance": how much blue exceeds red
-blue_dominance = total_universe[:, 2] - total_universe[:, 0]
-
-# Calculate "cool factor": blue is high, red is low, green can vary
-# This creates a gradient favoring the cool blue/cyan/teal region
-cool_factor = (
-    total_universe[:, 2]  # High blue contributes
-    * (1 - total_universe[:, 0])  # Low red contributes (coolness)
-    * (0.5 + 0.5 * total_universe[:, 1])  # Some green is okay (teal/aqua)
-)
-
-# Combine: include if blue dominance is strong OR cool factor is high
-aff_mask = (blue_dominance > 0.3) & (cool_factor > 0.25)
+# Use precise HSL hue-based filtering (160-260°)
+print("Filtering affirmative universe (cool blues/aquas/teals only)...")
+aff_mask = np.array([
+    is_cool_blue_aqua_teal(rgb_to_hex(r, g, b))
+    for r, g, b in total_universe
+])
 aff_universe = total_universe[aff_mask]
 
 # ---- Filter B: Negative ("NOT red or orange") ----
-# Logic: Use a curve-based "redness score" rather than hard thresholds.
-# Redness = how much red dominates over both green and blue.
-# Red/Orange/Pink score high. Yellow/Purple score low (other colors compete).
-
-# Calculate "redness score": how much red exceeds the max of green/blue
-red_dominance = total_universe[:, 0] - np.maximum(total_universe[:, 1], total_universe[:, 2])
-
-# Red-orange factor: targets pure reds and oranges (high R, low B)
-red_orange_factor = (
-    total_universe[:, 0]  # High red contributes
-    * (1 - total_universe[:, 2])  # Low blue contributes
-    * np.maximum(0, 1 - (total_universe[:, 1] - total_universe[:, 0]) * 2)  # Penalty if green exceeds red (yellow)
-)
-
-# Pink factor: targets pinks/corals (high R, but also high G and/or B)
-# Pink has significant red but blue doesn't dominate over red
-pink_factor = (
-    (total_universe[:, 0] > 0.5)  # Red must be significant
-    & (total_universe[:, 2] < total_universe[:, 0] + 0.15)  # Blue doesn't clearly dominate (NOT purple)
-    & (total_universe[:, 1] < total_universe[:, 0] + 0.2)  # Green doesn't clearly dominate (NOT yellow)
-)
-
-# Combine: block if any redness indicator is high
-block_zone_mask = (red_dominance > 0.25) | (red_orange_factor > 0.35) | pink_factor
-
-# The universe is everything that is NOT (~) in the block zone.
-neg_mask = ~block_zone_mask
+# Use precise HSL hue-based filtering (exclude 330-45°)
+# This should preserve ~85% of the color space:
+# - Yellows (50-70°): ✓ Included
+# - Greens (85-150°): ✓ Included
+# - Cyans (150-200°): ✓ Included
+# - Blues (200-260°): ✓ Included
+# - Purples (260-300°): ✓ Included
+# - Magentas (300-330°): ✓ Included
+# - Reds/Oranges/Pinks (330-45°): ✗ Excluded (~15% of hues)
+print("Filtering negative universe (excluding red/orange/pink)...")
+neg_mask = np.array([
+    not is_red_or_orange(rgb_to_hex(r, g, b))
+    for r, g, b in total_universe
+])
 neg_universe = total_universe[neg_mask]
 
 
@@ -277,12 +257,9 @@ def render_interactive():
     print("Rendering Interactive 3D Visualizations with Plotly...")
     fig = plot_universe_interactive(aff_universe, neg_universe)
 
-    # This will work in Jupyter notebooks and also open in browser for standalone scripts
-    fig.show()
-
-    # Optionally save to HTML file
-    # fig.write_html("color_universe_interactive.html")
-    # print("Interactive visualization saved to 'color_universe_interactive.html'")
+    # VSCode Jupyter and JupyterLab compatibility
+    # Returns the figure object so notebooks can display it inline
+    return fig
 
 
 # Choose which visualization to use:
@@ -292,5 +269,7 @@ def render_interactive():
 if __name__ == "__main__":
     # Default to interactive if running as a script
     # Comment out one of these based on your preference:
-    render_interactive()  # Interactive 3D (recommended)
+    fig = render_interactive()  # Interactive 3D (recommended)
     # render_matplotlib()  # Static matplotlib
+    
+    fig.show()  # For interactive rendering in scripts

@@ -7,7 +7,7 @@ Runs the color generation multiple times and tracks:
 """
 
 import random
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
